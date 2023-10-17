@@ -9,14 +9,28 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
-var img *ebiten.Image
+const screen_w, screen_h = 640, 480
 
-var x float64 = 0
-var y float64 = 0
+type Penguin struct {
+    img *ebiten.Image
+
+    x, y float64
+    xv, yv float64
+}
+
+var penguin Penguin
 
 func init() {
+    penguin = Penguin{
+        img: nil,
+        x: screen_w / 2,
+        y: screen_h / 2,
+        xv: 0,
+        yv: 0,
+    }
+
 	var err error
-	img, _, err = ebitenutil.NewImageFromFile("assets/penguin.png")
+	penguin.img, _, err = ebitenutil.NewImageFromFile("assets/penguin.png")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -24,20 +38,35 @@ func init() {
 
 type Game struct{}
 
+func drawPenguin(screen *ebiten.Image, penguin Penguin) {
+    op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(penguin.x, penguin.y)
+    screen.DrawImage(penguin.img, op)
+}
+
+func updatePenguin(penguin *Penguin) {
+    penguin.x = penguin.x + penguin.xv
+    penguin.y = penguin.y + penguin.yv
+
+    penguin.xv = penguin.xv / 2
+    penguin.yv = penguin.yv / 2
+}
+
 func (g *Game) Update() error {
     if ebiten.IsKeyPressed(ebiten.KeyArrowRight) {
-        x = x + 1
+        penguin.xv = 4
     }
     if ebiten.IsKeyPressed(ebiten.KeyArrowLeft) {
-        x = x - 1
+        penguin.xv = -4
     }
     if ebiten.IsKeyPressed(ebiten.KeyArrowUp) {
-        y = y - 1
+        penguin.yv = -4
     }
     if ebiten.IsKeyPressed(ebiten.KeyArrowDown) {
-        y = y + 1
+        penguin.yv = 4
     }
-    log.Printf("%f %f\n", x, y)
+
+    updatePenguin(&penguin)
         
 	return nil
 }
@@ -45,9 +74,7 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
     screen.Fill(color.RGBA{0xfe, 0xfe, 0xfe, 0xff})
 
-    op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(x, y)
-    screen.DrawImage(img, op)
+    drawPenguin(screen, penguin)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
