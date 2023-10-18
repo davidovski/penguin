@@ -230,6 +230,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func main() {
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("penguin")
+    ebiten.SetTPS(10)
 
     game := Game{}
 
