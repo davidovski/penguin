@@ -96,51 +96,39 @@ func (penguin *Penguin) drawBounds(screen *ebiten.Image, game Game) {
         float32(penguin.x), float32(penguin.y),
         float32(penguin.Width()), float32(penguin.Height()),
         4, red, true)
-
-    
 }
 
-func (penguin *Penguin) update(g *Game) {
+func (penguin *Penguin) update(game *Game) {
+    g := 0.9 // force of gravity
+    penguin.yv += g
     if penguin.onGround{
-        penguin.yv = 0
-        penguin.y = g.ground(penguin.Cx()) - float64(penguin.img.Bounds().Dy())
-        penguin.x += penguin.xv
-        penguin.y += penguin.yv
+        //dx, dy := Normalize(game.ground.normal(penguin.Cx(), 1))
+        angle := game.ground.angle(penguin.Cx(), 1)
+        nx, ny :=  g * g * math.Tan(angle), -g
 
-        dx, dy := Normalize(g.ground.normal(penguin.x, 1))
-        penguin.xv += math.Sqrt(dx*dx + dy*dy) * math.Sin(g.ground.angle(penguin.Cx(), 2)) * 4
-        //penguin.yv += math.Sqrt(dx*dx + dy*dy) * math.Cos(g.ground.angle(penguin.Cx(), 2)) * 4
-        penguin.xv *= GROUND_RESISTANCE
-
-        return
+        penguin.xv += nx
+        penguin.yv += ny
     }
 
-    penguin.yv += 0.9
-
     penguin.x += penguin.xv
-    penguin.y += penguin.yv
 
-    penguin.xv *= AIR_RESISTANCE
-    penguin.yv *= AIR_RESISTANCE
-
-    if penguin.collideWithCurve(g.ground, 0, penguin.yv){
-        penguin.yv = 0
+    if penguin.collideWithCurve(game.ground, 0, penguin.yv){
+        penguin.y = game.ground(penguin.Cx()) - penguin.Height()
         penguin.onGround = true
-        return
-    } 
+    } else {
+        penguin.y += penguin.yv
+        penguin.onGround = false
+    }
+
+
 }
 
 func (p *Penguin) collideWithCurve(curve Curve, xv, yv float64) bool {
-    cy1 := curve(p.x + xv)
+    cy1 := curve(p.Cx() + xv)
     y1 := p.y + yv
-    y2 := p.y + yv + float64(p.img.Bounds().Dy())
+    y2 := yv + p.y + p.Height()
 
     if y1 < cy1 && cy1 < y2 {
-        return true
-    }
-
-    cy2 := curve(p.x + xv + float64(p.img.Bounds().Dx()))
-    if y1 < cy2 && cy2 < y2 {
         return true
     }
 
@@ -186,27 +174,50 @@ func Normalize(x, y float64) (float64, float64) {
     return x/m, y/m
 }
 
+func Magnitude(x, y float64) (float64) {
+    return math.Sqrt(x*x + y*y)
+}
+
 type Game struct{
     penguin Penguin
     ground Curve
 }
 
 func (g *Game) Update() error {
+    if ebiten.IsMouseButtonPressed(ebiten.MouseButton0){
+        cx, cy := ebiten.CursorPosition()
+        g.penguin.x = float64(cx)
+        g.penguin.y = float64(cy)
+        g.penguin.xv = 0
+        g.penguin.yv = 0
+    }
+
     if g.penguin.onGround{
         if ebiten.IsKeyPressed(ebiten.KeyA) {
-            g.penguin.xv = -4
+            g.penguin.xv -= 0.1
         }
 
         if ebiten.IsKeyPressed(ebiten.KeyD) {
-            g.penguin.xv = 4
+            g.penguin.xv += 0.1
         }
 
         if ebiten.IsKeyPressed(ebiten.KeySpace) {
             g.penguin.onGround = false
             fx, fy := Normalize(g.ground.normal(g.penguin.Cx(), 2))
             const jumpHeight = 8
-            g.penguin.xv += fx * jumpHeight
-            g.penguin.yv += fy * jumpHeight
+
+            var ex, ey float64 = 0, -1
+            switch {
+            case ebiten.IsKeyPressed(ebiten.KeyA):
+                ex -= 1
+            case ebiten.IsKeyPressed(ebiten.KeyD):
+                ex += 1
+            case ebiten.IsKeyPressed(ebiten.KeyS):
+                ey += 1 
+            }
+
+            g.penguin.xv += (ex + fx) * jumpHeight
+            g.penguin.yv += (ey + fy) * jumpHeight
         }
     }
 
@@ -230,14 +241,15 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func main() {
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("penguin")
-    ebiten.SetTPS(10)
+    //ebiten.SetTPS(10)
 
     game := Game{}
 
     game.ground = func(x float64)(y float64) {
         //return 200-math.Pow((x - 320)/320, 3)+math.Pow((x-320), 2)/300
-        //return 400
-        return 400+50*math.Sin(x/50)
+        //return 400-math.Pow((x-320)/20, 2)
+        return 400
+        //return 400+50*math.Cos(x/30)
     }
 
     game.init()
