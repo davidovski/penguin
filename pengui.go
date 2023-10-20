@@ -20,9 +20,9 @@ var BLUE = color.RGBA{0x81, 0xa2, 0xbe, 0xff}
 const screen_w, screen_h = 960, 540
 
 const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.004, 0.8
-const DELTA_RESOLUTION, DRAW_RESOLUTION, STROKE_WIDTH = 1.0, 4.0, 4.0
+const CAMERA_DELAY, DELTA_RESOLUTION, DRAW_RESOLUTION, STROKE_WIDTH = 0.7, 1.0, 4.0, 4.0
 
-var sx, sy = 0.0, 0.0
+var sx, sy, sxv, syv = 0.0, 0.0, 0.0, 0.0
 
 type Penguin struct {
     img *ebiten.Image
@@ -237,9 +237,9 @@ type Game struct{
 
 func (g *Game) Update() error {
     // calculate scroll x and y
-    sx = -(g.penguin.Cx() - screen_w/2)
-    sy = -(g.penguin.Cy() - screen_h/2)
 
+    sx = (CAMERA_DELAY * sx - (1-CAMERA_DELAY) * (g.penguin.Cx() - screen_w/2))
+    sy = (CAMERA_DELAY * sy - (1-CAMERA_DELAY) * (g.penguin.Cy() - screen_h/2))
 
     if ebiten.IsMouseButtonPressed(ebiten.MouseButton0){
         cx, cy := ebiten.CursorPosition()
