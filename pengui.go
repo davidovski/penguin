@@ -18,7 +18,9 @@ var WHITE = color.RGBA{0xfe, 0xfe, 0xfe, 0xff}
 var BLUE = color.RGBA{0x81, 0xa2, 0xbe, 0xff}
 
 const screen_w, screen_h = 640, 480
-const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.01, 0.8
+const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.004, 0.8
+
+const DELTA_RESOLUTION = 1.0
 
 var sx, sy = 0.0, 0.0
 
@@ -30,6 +32,7 @@ type Penguin struct {
     onGround bool
     fx, fy []float64
     airTime float64
+    angle float64
 }
 
 func newPenguin() Penguin {
@@ -69,11 +72,10 @@ func (penguin *Penguin) draw(screen *ebiten.Image, game Game) {
     op := &ebiten.DrawImageOptions{}
 
     if penguin.airTime < 60 {
-        angle := game.ground.angle(penguin.Cx(), 2)
         tx, ty := float64(penguin.Width()) / 2, float64(penguin.Height())
 
         op.GeoM.Translate(-tx, -ty)
-        op.GeoM.Rotate(angle)
+        op.GeoM.Rotate(penguin.angle)
         op.GeoM.Translate(tx, ty)
     }
 
@@ -110,8 +112,9 @@ func (penguin *Penguin) update(game *Game) {
 
     if penguin.onGround{
 
-        angle := game.ground.angle(penguin.Cx(), 1)
-        dx, dy := Normalize(game.ground.normal(penguin.Cx(), 1))
+        angle := game.ground.angle(penguin.Cx())
+        penguin.angle = angle
+        dx, dy := Normalize(game.ground.normal(penguin.Cx()))
 
         nx, ny := Multiply(dx, dy, GRAVITY * math.Cos(angle))
 
@@ -185,20 +188,20 @@ func (curve Curve) draw(dst *ebiten.Image, clr color.Color, width float32, resol
     }
 }
 
-func (curve Curve) delta(x, r float64) (float64, float64){
-    x1, x2 := x + r, x - r
+func (curve Curve) delta(x float64) (float64, float64){
+    x1, x2 := x + DELTA_RESOLUTION, x - DELTA_RESOLUTION
     y1, y2 := curve(x1), curve(x2)
     dx, dy := x2 - x1, y2 - y1
     return dx, dy
 }
 
-func (curve Curve) angle(x, r float64) (float64){
-    dx, dy := curve.delta(x, r)
-    return math.Atan(dy / dx)
+func (curve Curve) angle(x float64) (float64){
+    dx, dy := curve.delta(x)
+    return Angle(dx, dy)
 }
 
-func (curve Curve) normal(x, r float64) (float64, float64){
-    dx, dy := curve.delta(x, r)
+func (curve Curve) normal(x float64) (float64, float64){
+    dx, dy := curve.delta(x)
     //m := -(dx / dy)
     return -dy,dx 
 }
@@ -209,6 +212,9 @@ func Normalize(x, y float64) (float64, float64) {
 }
 
 func Angle(x, y float64) (float64) {
+    if x == 0 {
+        return 0
+    }
     return math.Atan(y / x)
 }
 
@@ -241,20 +247,20 @@ func (g *Game) Update() error {
 
     if g.penguin.onGround{
         if ebiten.IsKeyPressed(ebiten.KeyA) {
-            dx, dy := Normalize(g.ground.delta(g.penguin.Cx(), 1))
+            dx, dy := Normalize(g.ground.delta(g.penguin.Cx()))
             g.penguin.xv += dx * PUSH
             g.penguin.yv += dy * PUSH
         }
 
         if ebiten.IsKeyPressed(ebiten.KeyD) {
-            dx, dy := Normalize(g.ground.delta(g.penguin.Cx(), 1))
+            dx, dy := Normalize(g.ground.delta(g.penguin.Cx()))
             g.penguin.xv -= dx * PUSH
             g.penguin.yv -= dy * PUSH
         }
 
         if ebiten.IsKeyPressed(ebiten.KeySpace) {
             g.penguin.onGround = false
-            fx, fy := Normalize(g.ground.normal(g.penguin.Cx(), 2))
+            fx, fy := Normalize(g.ground.normal(g.penguin.Cx()))
             const jumpHeight = 16
 
             g.penguin.xv += fx * jumpHeight
@@ -292,7 +298,7 @@ func main() {
         if x < 0 {
             return 0
         }
-        return 500+50*-math.Cos(x/130)*math.Sin(x/164)*math.Cos((x-400)/400) + -500*math.Cos(x/800)
+        return 500+50*-math.Cos(x/400*(math.Cos(x/4870)+1))*math.Sin(x/845*(math.Cos(x/547)+1))*math.Cos((x-400)/400) + -500*math.Cos(x/800)
     }
 
     game.init()
