@@ -8,6 +8,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
@@ -19,8 +20,10 @@ var BLUE = color.RGBA{0x81, 0xa2, 0xbe, 0xff}
 
 const screen_w, screen_h = 960, 540
 
-const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.004, 0.8
-const CAMERA_DELAY, DELTA_RESOLUTION, DRAW_RESOLUTION, STROKE_WIDTH = 0.7, 1.0, 4.0, 4.0
+const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH, JUMP_HEIGHT = 1.2, 0.02, 0.02, 0.6, 16
+const CAMERA_DELAY, DELTA_RESOLUTION, DRAW_RESOLUTION, STROKE_WIDTH = 0.7, 1.0, 2.0, 4.0
+
+var debug = false
 
 var sx, sy, sxv, syv = 0.0, 0.0, 0.0, 0.0
 
@@ -68,7 +71,7 @@ func (p *Penguin) Cy() (float64) {
     return p.y + float64(p.img.Bounds().Dy()) / 2
 }
 
-func (penguin *Penguin) draw(screen *ebiten.Image, game Game) {
+func (penguin *Penguin) Draw(screen *ebiten.Image, game Game) {
     op := &ebiten.DrawImageOptions{}
 
     if penguin.airTime < 60 {
@@ -83,9 +86,9 @@ func (penguin *Penguin) draw(screen *ebiten.Image, game Game) {
     screen.DrawImage(penguin.img, op)
 }
 
-func (penguin *Penguin) drawBounds(screen *ebiten.Image, game Game) {
+func (penguin *Penguin) DrawForces(screen *ebiten.Image, game Game) {
 
-    const s float64 = 200
+    const s float64 = 60
 
     tx, ty := 0.0, 0.0
     for i := range penguin.fx{
@@ -93,19 +96,20 @@ func (penguin *Penguin) drawBounds(screen *ebiten.Image, game Game) {
         tx += x
         ty += y
 
-        vector.StrokeLine(screen, 
-            float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()), 
-            float32(sx + penguin.Cx() + x*s), float32(sy + penguin.y + penguin.Height() + y*s), 
+        vector.StrokeLine(screen,
+            float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()),
+            float32(sx + penguin.Cx() + x*s), float32(sy + penguin.y + penguin.Height() + y*s),
             STROKE_WIDTH, GREEN, true)
     }
-    vector.StrokeLine(screen, 
-        float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()), 
-        float32(sx + penguin.Cx() + tx*s), float32(sy + penguin.y + penguin.Height() + ty*s), 
+
+    vector.StrokeLine(screen,
+        float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()),
+        float32(sx + penguin.Cx() + tx*s), float32(sy + penguin.y + penguin.Height() + ty*s),
         STROKE_WIDTH, RED, true)
 
 }
 
-func (penguin *Penguin) update(game *Game) {
+func (penguin *Penguin) CalculateForces(game *Game) {
     gx, gy := 0.0, GRAVITY
     penguin.fx = []float64{gx}
     penguin.fy = []float64{gy}
@@ -125,14 +129,16 @@ func (penguin *Penguin) update(game *Game) {
             sd = -1
         }
 
-        rx, ry := Multiply(-sd*dy, sd*dx, -FRICTION * Magnitude(penguin.xv, penguin.yv))
+        rx, ry := Multiply(-sd*dy, sd*dx, -FRICTION * GRAVITY)
         penguin.fx = append(penguin.fx, nx, rx)
         penguin.fy = append(penguin.fy, ny, ry)
     }
     ax, ay := Multiply(penguin.xv, penguin.yv, -AIR_RESISTANCE)
     penguin.fx = append(penguin.fx, ax)
     penguin.fy = append(penguin.fy, ay)
+}
 
+func (penguin *Penguin) Update(game *Game) {
     // add the forces to the current velocity
     for _, v := range penguin.fx{
         penguin.xv += v
@@ -148,15 +154,13 @@ func (penguin *Penguin) update(game *Game) {
     // check if the penguin is on the ground
     if penguin.y+penguin.Height() > game.ground(penguin.Cx()){
         penguin.y = game.ground(penguin.Cx()) - penguin.Height()
-        if !penguin.onGround{
-            penguin.yv = 0
-        }
         penguin.onGround = true
         penguin.airTime = 0
     } else {
         penguin.onGround = false
         penguin.airTime += 1
     }
+
 }
 
 func (p *Penguin) collideWithCurve(curve Curve, xv, yv float64) bool {
@@ -206,8 +210,7 @@ func (curve Curve) angle(x float64) (float64){
 
 func (curve Curve) normal(x float64) (float64, float64){
     dx, dy := curve.delta(x)
-    //m := -(dx / dy)
-    return -dy,dx 
+    return -dy,dx
 }
 
 func Normalize(x, y float64) (float64, float64) {
@@ -241,6 +244,10 @@ func (g *Game) Update() error {
     sx = (CAMERA_DELAY * sx - (1-CAMERA_DELAY) * (g.penguin.Cx() - screen_w/2))
     sy = (CAMERA_DELAY * sy - (1-CAMERA_DELAY) * (g.penguin.Cy() - screen_h/2))
 
+    if inpututil.IsKeyJustPressed(ebiten.KeyB) {
+        debug = !debug;
+    }
+
     if ebiten.IsMouseButtonPressed(ebiten.MouseButton0){
         cx, cy := ebiten.CursorPosition()
         g.penguin.x = float64(cx) - g.penguin.Width()/2
@@ -249,30 +256,29 @@ func (g *Game) Update() error {
         g.penguin.yv = 0
     }
 
+    g.penguin.CalculateForces(g)
     if g.penguin.onGround{
         if ebiten.IsKeyPressed(ebiten.KeyA) {
             dx, dy := Normalize(g.ground.delta(g.penguin.Cx()))
-            g.penguin.xv += dx * PUSH
-            g.penguin.yv += dy * PUSH
+            g.penguin.fx = append(g.penguin.fx, dx * PUSH)
+            g.penguin.fy = append(g.penguin.fy, dy * PUSH)
         }
 
         if ebiten.IsKeyPressed(ebiten.KeyD) {
             dx, dy := Normalize(g.ground.delta(g.penguin.Cx()))
-            g.penguin.xv -= dx * PUSH
-            g.penguin.yv -= dy * PUSH
+            g.penguin.fx = append(g.penguin.fx, dx * -PUSH)
+            g.penguin.fy = append(g.penguin.fy, dy * -PUSH)
         }
 
         if ebiten.IsKeyPressed(ebiten.KeySpace) {
             g.penguin.onGround = false
-            fx, fy := Normalize(g.ground.normal(g.penguin.Cx()))
-            const jumpHeight = 16
-
-            g.penguin.xv += fx * jumpHeight
-            g.penguin.yv += fy * jumpHeight
+            jx, jy := Normalize(g.ground.normal(g.penguin.Cx()))
+            g.penguin.fx = append(g.penguin.fx, jx * JUMP_HEIGHT)
+            g.penguin.fy = append(g.penguin.fy, jy * JUMP_HEIGHT)
         }
     }
 
-    g.penguin.update(g)
+    g.penguin.Update(g)
 
 	return nil
 }
@@ -281,8 +287,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
     screen.Fill(BLUE)
 
     g.ground.draw(screen, BLACK, STROKE_WIDTH, DRAW_RESOLUTION, true);
-    g.penguin.draw(screen, *g)
-    //g.penguin.drawBounds(screen, *g)
+    g.penguin.Draw(screen, *g)
+    if debug {
+        g.penguin.DrawForces(screen, *g)
+    }
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -298,7 +306,6 @@ func main() {
 
     game.ground = func(x float64)(y float64) {
         //return 200-math.Pow(x/200, 3)+math.Pow((x-320), 2)/300
-        //return 400-math.Pow((x-320)/20, 2)
         if x < 0 {
             return 0
         }
