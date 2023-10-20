@@ -11,10 +11,12 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
-var red = color.RGBA{0xcc, 0x66, 0x66, 0xff}
-var green = color.RGBA{0xb5, 0xbd, 0x68, 0xff}
+var RED = color.RGBA{0xcc, 0x66, 0x66, 0xff}
+var GREEN = color.RGBA{0xb5, 0xbd, 0x68, 0xff}
 const screen_w, screen_h = 640, 480
-const gravity, friction, air_resistance = 0.9, 0.01, 0.01
+const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.01, 0.8
+
+var sx, sy = 0.0, 0.0
 
 type Penguin struct {
     img *ebiten.Image
@@ -71,7 +73,7 @@ func (penguin *Penguin) draw(screen *ebiten.Image, game Game) {
         op.GeoM.Translate(tx, ty)
     }
 
-    op.GeoM.Translate(penguin.x, penguin.y)
+    op.GeoM.Translate(sx + penguin.x, sy + penguin.y)
     screen.DrawImage(penguin.img, op)
 }
 
@@ -86,19 +88,19 @@ func (penguin *Penguin) drawBounds(screen *ebiten.Image, game Game) {
         ty += y
 
         vector.StrokeLine(screen, 
-            float32(penguin.Cx()), float32(penguin.y+penguin.Height()), 
-            float32(penguin.Cx() + x*s), float32(penguin.y + penguin.Height() + y*s), 
-            4, green, true)
+            float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()), 
+            float32(sx + penguin.Cx() + x*s), float32(sy + penguin.y + penguin.Height() + y*s), 
+            4, GREEN, true)
     }
     vector.StrokeLine(screen, 
-        float32(penguin.Cx()), float32(penguin.y+penguin.Height()), 
-        float32(penguin.Cx() + tx*s), float32(penguin.y + penguin.Height() + ty*s), 
-        4, red, true)
+        float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()), 
+        float32(sx + penguin.Cx() + tx*s), float32(sy + penguin.y + penguin.Height() + ty*s), 
+        4, RED, true)
 
 }
 
 func (penguin *Penguin) update(game *Game) {
-    gx, gy := 0.0, gravity
+    gx, gy := 0.0, GRAVITY
     penguin.fx = []float64{gx}
     penguin.fy = []float64{gy}
 
@@ -106,7 +108,7 @@ func (penguin *Penguin) update(game *Game) {
         angle := game.ground.angle(penguin.Cx(), 1)
         dx, dy := Normalize(game.ground.normal(penguin.Cx(), 1))
 
-        nx, ny := Multiply(dx, dy, gravity * math.Cos(angle))
+        nx, ny := Multiply(dx, dy, GRAVITY * math.Cos(angle))
 
         sd := 0.0
         if penguin.xv > 0 {
@@ -115,31 +117,36 @@ func (penguin *Penguin) update(game *Game) {
             sd = -1
         }
 
-        rx, ry := Multiply(-sd*dy, sd*dx, -friction)
+        rx, ry := Multiply(-sd*dy, sd*dx, -FRICTION * Magnitude(penguin.xv, penguin.yv))
         penguin.fx = append(penguin.fx, nx, rx)
         penguin.fy = append(penguin.fy, ny, ry)
     }
-    ax, ay := Multiply(penguin.xv, penguin.yv, -air_resistance)
+    ax, ay := Multiply(penguin.xv, penguin.yv, -AIR_RESISTANCE)
     penguin.fx = append(penguin.fx, ax)
     penguin.fy = append(penguin.fy, ay)
 
+    // add the forces to the current velocity
     for _, v := range penguin.fx{
         penguin.xv += v
     }
     for _, v := range penguin.fy{
         penguin.yv += v
     }
+
+    // add the current velocity to the penguin
     penguin.x += penguin.xv
     penguin.y += penguin.yv
 
+    // check if the penguin is on the ground
     if penguin.y+penguin.Height() > game.ground(penguin.Cx()){
         penguin.y = game.ground(penguin.Cx()) - penguin.Height()
+        if !penguin.onGround{
+            penguin.yv = 0
+        }
         penguin.onGround = true
     } else {
         penguin.onGround = false
     }
-
-
 }
 
 func (p *Penguin) collideWithCurve(curve Curve, xv, yv float64) bool {
@@ -160,13 +167,13 @@ func (g *Game) init() {
 
 type Curve func(x float64)(y float64)
 
-func (curve Curve) draw(dst *ebiten.Image, clr color.Color, width float32, resolution int, antialias bool) {
-    for x1 := 0; x1 < screen_w; x1 += resolution {
+func (curve Curve) draw(dst *ebiten.Image, clr color.Color, width float32, resolution float64, antialias bool) {
+    for x1 := float64(-sx); x1 < float64(screen_w - sx); x1 += resolution {
         x2 := x1 + resolution
-        y1 := curve(float64(x1))
-        y2 := curve(float64(x2))
+        y1 := curve(x1)
+        y2 := curve(x2)
 
-        vector.StrokeLine(dst, float32(x1), float32(y1), float32(x2), float32(y2), width, color.RGBA{0x19, 0x19, 0x19, 0xff}, true)
+        vector.StrokeLine(dst, float32(sx + x1), float32(sy + y1), float32(sx + x2), float32(sy + y2), width, color.RGBA{0x19, 0x19, 0x19, 0xff}, true)
     }
 }
 
@@ -211,6 +218,11 @@ type Game struct{
 }
 
 func (g *Game) Update() error {
+    // calculate scroll x and y
+    sx = -(g.penguin.Cx() - screen_w/2)
+    sy = -(g.penguin.Cy() - screen_h/2)
+
+
     if ebiten.IsMouseButtonPressed(ebiten.MouseButton0){
         cx, cy := ebiten.CursorPosition()
         g.penguin.x = float64(cx) - g.penguin.Width()/2
@@ -221,30 +233,24 @@ func (g *Game) Update() error {
 
     if g.penguin.onGround{
         if ebiten.IsKeyPressed(ebiten.KeyA) {
-            g.penguin.xv -= 0.1
+            dx, dy := Normalize(g.ground.delta(g.penguin.Cx(), 1))
+            g.penguin.xv += dx * PUSH
+            g.penguin.yv += dy * PUSH
         }
 
         if ebiten.IsKeyPressed(ebiten.KeyD) {
-            g.penguin.xv += 0.1
+            dx, dy := Normalize(g.ground.delta(g.penguin.Cx(), 1))
+            g.penguin.xv -= dx * PUSH
+            g.penguin.yv -= dy * PUSH
         }
 
         if ebiten.IsKeyPressed(ebiten.KeySpace) {
             g.penguin.onGround = false
             fx, fy := Normalize(g.ground.normal(g.penguin.Cx(), 2))
-            const jumpHeight = 8
+            const jumpHeight = 16
 
-            var ex, ey float64 = 0, -1
-            switch {
-            case ebiten.IsKeyPressed(ebiten.KeyA):
-                ex -= 1
-            case ebiten.IsKeyPressed(ebiten.KeyD):
-                ex += 1
-            case ebiten.IsKeyPressed(ebiten.KeyS):
-                ey += 1 
-            }
-
-            g.penguin.xv += (ex + fx) * jumpHeight
-            g.penguin.yv += (ey + fy) * jumpHeight
+            g.penguin.xv += fx * jumpHeight
+            g.penguin.yv += fy * jumpHeight
         }
     }
 
@@ -256,7 +262,7 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
     screen.Fill(color.RGBA{0xfe, 0xfe, 0xfe, 0xff})
 
-    g.ground.draw(screen, color.RGBA{0x19, 0x19, 0x19, 0xff}, 4, 16, true);
+    g.ground.draw(screen, color.RGBA{0x19, 0x19, 0x19, 0xff}, 4, 4, true);
     g.penguin.draw(screen, *g)
     g.penguin.drawBounds(screen, *g)
 }
@@ -273,10 +279,12 @@ func main() {
     game := Game{}
 
     game.ground = func(x float64)(y float64) {
-        //return 200-math.Pow((x - 320)/320, 3)+math.Pow((x-320), 2)/300
+        //return 200-math.Pow(x/200, 3)+math.Pow((x-320), 2)/300
         //return 400-math.Pow((x-320)/20, 2)
-        //return 400
-        return 240+50*math.Cos(x/30)
+        if x < 0 {
+            return 0
+        }
+        return 500+50*-math.Cos(x/130)*math.Sin(x/164)*math.Cos((x-400)/400) + -500*math.Cos(x/800)
     }
 
     game.init()
