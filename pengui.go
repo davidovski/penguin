@@ -20,7 +20,7 @@ var BLUE = color.RGBA{0x81, 0xa2, 0xbe, 0xff}
 
 const screen_w, screen_h = 960, 540
 
-const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH, JUMP_HEIGHT = 1.2, 0.02, 0.02, 0.6, 16
+const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH, JUMP_HEIGHT = 1.2, 0.1, 0.02, 0.8, 18
 const CAMERA_DELAY, DELTA_RESOLUTION, DRAW_RESOLUTION, STROKE_WIDTH = 0.7, 1.0, 2.0, 4.0
 
 var debug = false
@@ -239,10 +239,6 @@ type Game struct{
 }
 
 func (g *Game) Update() error {
-    // calculate scroll x and y
-
-    sx = (CAMERA_DELAY * sx - (1-CAMERA_DELAY) * (g.penguin.Cx() - screen_w/2))
-    sy = (CAMERA_DELAY * sy - (1-CAMERA_DELAY) * (g.penguin.Cy() - screen_h/2))
 
     if inpututil.IsKeyJustPressed(ebiten.KeyB) {
         debug = !debug;
@@ -280,6 +276,16 @@ func (g *Game) Update() error {
 
     g.penguin.Update(g)
 
+    // calculate scroll x and y
+
+    if debug{
+        sx = -(g.penguin.Cx() - screen_w/2)
+        sy = -(g.penguin.Cy() - screen_h/2)
+    } else {
+        sx = (CAMERA_DELAY * sx - (1-CAMERA_DELAY) * (g.penguin.Cx() - screen_w/2))
+        sy = (CAMERA_DELAY * sy - (1-CAMERA_DELAY) * (g.penguin.Cy() - screen_h/2))
+    }
+
 	return nil
 }
 
@@ -309,7 +315,7 @@ func main() {
         if x < 0 {
             return 0
         }
-        return 500+50*-math.Cos(x/400*(math.Cos(x/4870)+1))*math.Sin(x/845*(math.Cos(x/547)+1))*math.Cos((x-400)/400) + -500*math.Cos(x/800)
+        return 500+50*-math.Cos(x/400*(math.Cos(x/4870)+1))*math.Sin(x/845*(math.Cos(x/547)+1))*math.Cos((x-400)/400) + -500*math.Cos(x/500)
     }
 
     game.init()
