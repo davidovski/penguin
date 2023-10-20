@@ -17,10 +17,10 @@ var BLACK = color.RGBA{0x19, 0x19, 0x19, 0xff}
 var WHITE = color.RGBA{0xfe, 0xfe, 0xfe, 0xff}
 var BLUE = color.RGBA{0x81, 0xa2, 0xbe, 0xff}
 
-const screen_w, screen_h = 640, 480
-const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.004, 0.8
+const screen_w, screen_h = 960, 540
 
-const DELTA_RESOLUTION = 1.0
+const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.004, 0.8
+const DELTA_RESOLUTION, DRAW_RESOLUTION, STROKE_WIDTH = 1.0, 4.0, 4.0
 
 var sx, sy = 0.0, 0.0
 
@@ -96,12 +96,12 @@ func (penguin *Penguin) drawBounds(screen *ebiten.Image, game Game) {
         vector.StrokeLine(screen, 
             float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()), 
             float32(sx + penguin.Cx() + x*s), float32(sy + penguin.y + penguin.Height() + y*s), 
-            4, GREEN, true)
+            STROKE_WIDTH, GREEN, true)
     }
     vector.StrokeLine(screen, 
         float32(sx + penguin.Cx()), float32(sy + penguin.y+penguin.Height()), 
         float32(sx + penguin.Cx() + tx*s), float32(sy + penguin.y + penguin.Height() + ty*s), 
-        4, RED, true)
+        STROKE_WIDTH, RED, true)
 
 }
 
@@ -183,7 +183,11 @@ func (curve Curve) draw(dst *ebiten.Image, clr color.Color, width float32, resol
         y1 := curve(x1)
         y2 := curve(x2)
 
-        vector.DrawFilledRect(dst, float32(sx + x1), float32(sy + y1), float32(resolution), float32(screen_h - (sy + y1)), WHITE, true)
+        ry := y1
+        if y2 > y1{
+            ry = y2
+        }
+        vector.DrawFilledRect(dst, float32(sx + x1), float32(sy + ry), float32(resolution), float32(screen_h - (sy + ry)), WHITE, true)
         vector.StrokeLine(dst, float32(sx + x1), float32(sy + y1), float32(sx + x2), float32(sy + y2), width, clr, true)
     }
 }
@@ -276,17 +280,17 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
     screen.Fill(BLUE)
 
-    g.ground.draw(screen, BLACK, 4, 1, true);
+    g.ground.draw(screen, BLACK, STROKE_WIDTH, DRAW_RESOLUTION, true);
     g.penguin.draw(screen, *g)
     //g.penguin.drawBounds(screen, *g)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return 640, 480
+	return screen_w, screen_h
 }
 
 func main() {
-	ebiten.SetWindowSize(640, 480)
+	ebiten.SetWindowSize(screen_w, screen_h)
 	ebiten.SetWindowTitle("penguin")
     ebiten.SetTPS(60)
 
