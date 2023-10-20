@@ -11,11 +11,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
-const GROUND_RESISTANCE = 0.8
-const AIR_RESISTANCE = 0.99
 var red = color.RGBA{0xcc, 0x66, 0x66, 0xff}
 var green = color.RGBA{0xb5, 0xbd, 0x68, 0xff}
 const screen_w, screen_h = 640, 480
+const gravity, friction, air_resistance = 0.9, 0.01, 0.01
 
 type Penguin struct {
     img *ebiten.Image
@@ -23,6 +22,8 @@ type Penguin struct {
     x, y float64
     xv, yv float64
     onGround bool
+    fx []float64
+    fy []float64
 }
 
 func newPenguin() Penguin {
@@ -76,47 +77,65 @@ func (penguin *Penguin) draw(screen *ebiten.Image, game Game) {
 
 func (penguin *Penguin) drawBounds(screen *ebiten.Image, game Game) {
 
-    var m float64 = 16
+    const s float64 = 200
 
-    vector.StrokeLine(screen, 
-        float32(penguin.Cx()), float32(penguin.y+penguin.Height()), 
-        float32(penguin.Cx() + penguin.xv*m), float32(penguin.y + penguin.Height() + penguin.yv*m), 
-        4, red, true)
+    tx, ty := 0.0, 0.0
+    for i := range penguin.fx{
+        x, y := penguin.fx[i], penguin.fy[i]
+        tx += x
+        ty += y
 
-    if penguin.onGround{
-        fx, fy := Normalize(game.ground.normal(game.penguin.Cx(), 2))
         vector.StrokeLine(screen, 
             float32(penguin.Cx()), float32(penguin.y+penguin.Height()), 
-            float32(penguin.Cx() + fx*penguin.Height()), float32(penguin.y + penguin.Height() + fy*penguin.Height()), 
+            float32(penguin.Cx() + x*s), float32(penguin.y + penguin.Height() + y*s), 
             4, green, true)
-        return
     }
-
-    vector.StrokeRect(screen,
-        float32(penguin.x), float32(penguin.y),
-        float32(penguin.Width()), float32(penguin.Height()),
+    vector.StrokeLine(screen, 
+        float32(penguin.Cx()), float32(penguin.y+penguin.Height()), 
+        float32(penguin.Cx() + tx*s), float32(penguin.y + penguin.Height() + ty*s), 
         4, red, true)
+
 }
 
 func (penguin *Penguin) update(game *Game) {
-    g := 0.9 // force of gravity
-    penguin.yv += g
+    gx, gy := 0.0, gravity
+    penguin.fx = []float64{gx}
+    penguin.fy = []float64{gy}
+
     if penguin.onGround{
-        //dx, dy := Normalize(game.ground.normal(penguin.Cx(), 1))
         angle := game.ground.angle(penguin.Cx(), 1)
-        nx, ny :=  g * g * math.Tan(angle), -g
+        dx, dy := Normalize(game.ground.normal(penguin.Cx(), 1))
 
-        penguin.xv += nx
-        penguin.yv += ny
+        nx, ny := Multiply(dx, dy, gravity * math.Cos(angle))
+
+        sd := 0.0
+        if penguin.xv > 0 {
+            sd = 1
+        } else if penguin.xv < 0 {
+            sd = -1
+        }
+
+        rx, ry := Multiply(-sd*dy, sd*dx, -friction)
+        penguin.fx = append(penguin.fx, nx, rx)
+        penguin.fy = append(penguin.fy, ny, ry)
     }
+    ax, ay := Multiply(penguin.xv, penguin.yv, -air_resistance)
+    penguin.fx = append(penguin.fx, ax)
+    penguin.fy = append(penguin.fy, ay)
 
+    for _, v := range penguin.fx{
+        penguin.xv += v
+    }
+    for _, v := range penguin.fy{
+        penguin.yv += v
+    }
     penguin.x += penguin.xv
+    penguin.y += penguin.yv
 
-    if penguin.collideWithCurve(game.ground, 0, penguin.yv){
+    if penguin.y+penguin.Height() > game.ground(penguin.Cx()){
         penguin.y = game.ground(penguin.Cx()) - penguin.Height()
         penguin.onGround = true
     } else {
-        penguin.y += penguin.yv
         penguin.onGround = false
     }
 
@@ -174,6 +193,14 @@ func Normalize(x, y float64) (float64, float64) {
     return x/m, y/m
 }
 
+func Angle(x, y float64) (float64) {
+    return math.Atan(y / x)
+}
+
+func Multiply(x, y, c float64) (float64, float64) {
+    return x*c, y*c
+}
+
 func Magnitude(x, y float64) (float64) {
     return math.Sqrt(x*x + y*y)
 }
@@ -186,8 +213,8 @@ type Game struct{
 func (g *Game) Update() error {
     if ebiten.IsMouseButtonPressed(ebiten.MouseButton0){
         cx, cy := ebiten.CursorPosition()
-        g.penguin.x = float64(cx)
-        g.penguin.y = float64(cy)
+        g.penguin.x = float64(cx) - g.penguin.Width()/2
+        g.penguin.y = float64(cy) - g.penguin.Height()/2
         g.penguin.xv = 0
         g.penguin.yv = 0
     }
@@ -248,8 +275,8 @@ func main() {
     game.ground = func(x float64)(y float64) {
         //return 200-math.Pow((x - 320)/320, 3)+math.Pow((x-320), 2)/300
         //return 400-math.Pow((x-320)/20, 2)
-        return 400
-        //return 400+50*math.Cos(x/30)
+        //return 400
+        return 240+50*math.Cos(x/30)
     }
 
     game.init()
