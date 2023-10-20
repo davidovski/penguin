@@ -13,6 +13,10 @@ import (
 
 var RED = color.RGBA{0xcc, 0x66, 0x66, 0xff}
 var GREEN = color.RGBA{0xb5, 0xbd, 0x68, 0xff}
+var BLACK = color.RGBA{0x19, 0x19, 0x19, 0xff}
+var WHITE = color.RGBA{0xfe, 0xfe, 0xfe, 0xff}
+var BLUE = color.RGBA{0x81, 0xa2, 0xbe, 0xff}
+
 const screen_w, screen_h = 640, 480
 const GRAVITY, FRICTION, AIR_RESISTANCE, PUSH = 1.2, 0.02, 0.01, 0.8
 
@@ -173,7 +177,8 @@ func (curve Curve) draw(dst *ebiten.Image, clr color.Color, width float32, resol
         y1 := curve(x1)
         y2 := curve(x2)
 
-        vector.StrokeLine(dst, float32(sx + x1), float32(sy + y1), float32(sx + x2), float32(sy + y2), width, color.RGBA{0x19, 0x19, 0x19, 0xff}, true)
+        vector.DrawFilledRect(dst, float32(sx + x1), float32(sy + y1), float32(resolution), float32(screen_h - (sy + y1)), WHITE, true)
+        vector.StrokeLine(dst, float32(sx + x1), float32(sy + y1), float32(sx + x2), float32(sy + y2), width, clr, true)
     }
 }
 
@@ -260,11 +265,11 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-    screen.Fill(color.RGBA{0xfe, 0xfe, 0xfe, 0xff})
+    screen.Fill(BLUE)
 
-    g.ground.draw(screen, color.RGBA{0x19, 0x19, 0x19, 0xff}, 4, 4, true);
+    g.ground.draw(screen, BLACK, 4, 1, true);
     g.penguin.draw(screen, *g)
-    g.penguin.drawBounds(screen, *g)
+    //g.penguin.drawBounds(screen, *g)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
