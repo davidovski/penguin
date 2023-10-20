@@ -28,13 +28,13 @@ type Penguin struct {
     x, y float64
     xv, yv float64
     onGround bool
-    fx []float64
-    fy []float64
+    fx, fy []float64
+    airTime float64
 }
 
 func newPenguin() Penguin {
     penguin := Penguin{
-        x: screen_w / 2,
+        x: -200,
         y: 0,
         xv: 0,
         yv: 0,
@@ -68,7 +68,7 @@ func (p *Penguin) Cy() (float64) {
 func (penguin *Penguin) draw(screen *ebiten.Image, game Game) {
     op := &ebiten.DrawImageOptions{}
 
-    if penguin.onGround {
+    if penguin.airTime < 60 {
         angle := game.ground.angle(penguin.Cx(), 2)
         tx, ty := float64(penguin.Width()) / 2, float64(penguin.Height())
 
@@ -109,6 +109,7 @@ func (penguin *Penguin) update(game *Game) {
     penguin.fy = []float64{gy}
 
     if penguin.onGround{
+
         angle := game.ground.angle(penguin.Cx(), 1)
         dx, dy := Normalize(game.ground.normal(penguin.Cx(), 1))
 
@@ -148,8 +149,10 @@ func (penguin *Penguin) update(game *Game) {
             penguin.yv = 0
         }
         penguin.onGround = true
+        penguin.airTime = 0
     } else {
         penguin.onGround = false
+        penguin.airTime += 1
     }
 }
 
@@ -279,7 +282,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func main() {
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("penguin")
-    //ebiten.SetTPS(10)
+    ebiten.SetTPS(60)
 
     game := Game{}
 
